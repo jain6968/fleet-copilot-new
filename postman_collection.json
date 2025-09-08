@@ -1,0 +1,63 @@
+{
+  "info": {
+    "name": "Fleet CoPilot Backend (Aura)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": "http://localhost:4000/health"
+      }
+    },
+    {
+      "name": "Search VIN",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:4000/api/search?q=1FBUU6YAA5HA71058",
+          "host": [
+            "localhost"
+          ],
+          "protocol": "http",
+          "port": "4000",
+          "path": [
+            "api",
+            "search"
+          ],
+          "query": [
+            {
+              "key": "q",
+              "value": "1FBUU6YAA5HA71058"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Vehicle by VIN",
+      "request": {
+        "method": "GET",
+        "url": "http://localhost:4000/api/vehicle/1FBUU6YAA5HA71058"
+      }
+    },
+    {
+      "name": "Accept Evidence",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"action\": \"accept\", \"user\": \"test@example.com\"}"
+        },
+        "url": "http://localhost:4000/api/evidence/TSB-97/action"
+      }
+    }
+  ]
+}

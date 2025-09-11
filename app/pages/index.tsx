@@ -70,6 +70,9 @@ export default function Home(){
           <div className="text-gray-500 text-sm">Search to load a vehicle…</div>
         )}
       </Card>
+      <div className="mt-8">
+      <LangflowChatPanel />
+      </div>
     </div>
 
     {/* Center Content: Evidences */}
@@ -113,9 +116,6 @@ export default function Home(){
                 {data.diagnosis.nextSteps.map((s:string,i:number) => (<li key={i}>{s}</li>))}
               </ul>
             </div>
-            <div className="mt-8">
-            <LangflowChatPanel />
-          </div>
           </div>
         ) : (
           <div className="text-gray-500 text-sm">No diagnosis yet.</div>

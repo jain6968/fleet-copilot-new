@@ -2,9 +2,12 @@ import { signIn, useSession } from "next-auth/react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 export default function Login(){
 const { data: session, status } = useSession();
 const router = useRouter();
+
 
 useEffect(() => {
   if (status === "authenticated") {

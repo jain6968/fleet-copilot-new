@@ -13,8 +13,7 @@ const app = express();
 app.use(cors({ origin: "http://localhost:3000", credentials: true }));
 app.use(express.json());
 
-// Minimal health
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => res.status(200).send("ok"));
 
 // Debug: show which DB we're pointing at + simple count
 app.get("/api/debug/where", async (_req, res) => {
@@ -36,7 +35,7 @@ app.use("/api/vehicle", vehicle);
 app.use("/api/evidence", evidence);
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`Backend running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
 
 // Non‑blocking connectivity check with retry
 (async function checkNeo4j() {

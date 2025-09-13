@@ -1,6 +1,21 @@
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function Login(){
+const { data: session, status } = useSession();
+const router = useRouter();
+
+useEffect(() => {
+  if (status === "authenticated") {
+      // already logged in, go home
+    router.replace("/");
+  }
+}, [status, router]);
+
+if (status === "loading") {
+    return <div>Loading…</div>;
+}
   return (
     <div className="min-h-screen grid place-items-center">
       <div className="bg-white shadow p-8 rounded max-w-md w-full text-center">

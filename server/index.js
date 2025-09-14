@@ -70,9 +70,6 @@ app.use("/api/search", search);
 app.use("/api/vehicle", vehicle);
 app.use("/api/evidence", evidence);
 
-
-app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
-
 // Non‑blocking connectivity check with retry
 (async function checkNeo4j() {
   const maxAttempts = 5;

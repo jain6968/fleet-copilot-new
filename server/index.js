@@ -7,9 +7,42 @@ import vehicle from "./routes/vehicle.js";
 import evidence from "./routes/evidence.js";
 import { driver } from "./neo4j.js";
 
+const app = express();
+
+const allowList = [
+  "http://localhost:3000",
+  "https://fleet-copilot-new.vercel.app",
+  // add preview domains if you use them, e.g.:
+  // "https://fleet-copilot-new-git-*.vercel.app"
+];
+
+const corsOptions = {
+  origin(origin, cb) {
+    // allow non-browser requests (curl/Postman) with no Origin
+    if (!origin) return cb(null, true);
+    const ok = allowList.some((o) =>
+      o.includes("*")
+        ? new RegExp("^" + o.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$").test(origin)
+        : o === origin
+    );
+    cb(ok ? null : new Error("CORS: origin not allowed"), ok);
+  },
+  credentials: true,
+};
+
+app.use((req, res, next) => {
+  // help caches differentiate per-Origin
+  res.setHeader("Vary", "Origin");
+  next();
+});
+
+app.use(cors(corsOptions));
+app.use(express.json());
+
+app.listen(PORT, () => console.log(`Backend on ${PORT}`));
+
 dotenv.config();
 
-const app = express();
 app.use(cors({ origin: "http://localhost:3000", credentials: true }));
 app.use(express.json());
 

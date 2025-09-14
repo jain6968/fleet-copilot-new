@@ -40,7 +40,9 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // ... your routes ...
-app.listen(PORT, () => console.log(`Backend on ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Backend running on port ${PORT}`);
+});
 
 dotenv.config();
 

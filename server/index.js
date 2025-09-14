@@ -8,7 +8,7 @@ import evidence from "./routes/evidence.js";
 import { driver } from "./neo4j.js";
 
 const app = express();
-
+const PORT = process.env.PORT || 4000;
 const allowList = [
   "http://localhost:3000",
   "https://fleet-copilot-new.vercel.app",
@@ -39,6 +39,7 @@ app.use((req, res, next) => {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// ... your routes ...
 app.listen(PORT, () => console.log(`Backend on ${PORT}`));
 
 dotenv.config();
@@ -67,7 +68,7 @@ app.use("/api/search", search);
 app.use("/api/vehicle", vehicle);
 app.use("/api/evidence", evidence);
 
-const PORT = process.env.PORT || 4000;
+
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
 
 // Non‑blocking connectivity check with retry

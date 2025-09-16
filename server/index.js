@@ -6,31 +6,54 @@ import search from "./routes/search.js";
 import vehicle from "./routes/vehicle.js";
 import evidence from "./routes/evidence.js";
 import { driver } from "./neo4j.js";
+import { searchHandler } from "./routes/search.js";
 
+app.get("/api/search", searchHandler);
+dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
-const list = (process.env.ALLOWED_ORIGINS || "")
+const list = (process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || "http://localhost:3000")
   .split(",")
   .map(s => s.trim())
   .filter(Boolean);
 
+// 2) CORS options with whitelist
 const corsOptions = {
   origin(origin, cb) {
-    if (!origin) return cb(null, true); // curl/postman
+    // allow non-browser clients with no Origin (curl/Postman)
+    if (!origin) return cb(null, true);
     const ok = list.includes(origin);
-    cb(ok ? null : new Error("CORS origin not allowed"), ok);
+    cb(ok ? null : new Error(`CORS: origin not allowed: ${origin}`), ok);
   },
   credentials: true
 };
 
-app.use((req, res, next) => {
-  // help caches differentiate per-Origin
-  res.setHeader("Vary", "Origin");
-  next();
+
+// 6) Centralized error handler that STILL sends CORS
+app.use((err, req, res, next) => {
+  // echo the allowed origin so the browser can see the error
+  const origin = req.headers.origin;
+  if (origin && list.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+  // send normalized JSON error
+  const status = err.status || 500;
+  res.status(status).json({
+    error: err.message || "Server error",
+    detail: process.env.NODE_ENV === "production" ? undefined : String(err?.stack || err)
+  });
 });
 
+// 4) Apply CORS globally, before JSON parser and routes
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// 5) Handle preflight for all routes
+app.options("*", cors(corsOptions), (req, res) => res.sendStatus(200));
+
+// ---- your routes below ----
+app.get("/health", (req, res) => res.status(200).send("ok"));
 
 // ... your routes ...
 app.listen(PORT, () => {
@@ -41,8 +64,6 @@ dotenv.config();
 
 app.use(cors({ origin: "http://localhost:3000", credentials: true }));
 app.use(express.json());
-
-app.get("/health", (_req, res) => res.status(200).send("ok"));
 
 // Debug: show which DB we're pointing at + simple count
 app.get("/api/debug/where", async (_req, res) => {

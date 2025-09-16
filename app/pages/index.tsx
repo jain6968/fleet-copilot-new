@@ -41,9 +41,12 @@ export default function Home(){
 
   const vehicle = data?.vehicle;
 
-  async function runSearch(q: string) {
-  const res = await fetch(`${BACKEND}/api/search?q=${encodeURIComponent(q)}`);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+async function runSearch(q: string) {
+  const res = await fetch(`${BACKEND}/api/search?q=${encodeURIComponent(q)}`, {
+    // do NOT include credentials unless you really need cookies
+    // credentials: "include"
+  });
+  if (!res.ok) throw new Error(`Search failed: ${res.status}`);
   return res.json();
 }
 

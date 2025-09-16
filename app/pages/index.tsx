@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import LangflowChatPanel from "../components/LangflowChat";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND || process.env.BACKEND_BASE_URL || "http://localhost:4000";
+const r = await fetch(`${BACKEND}/api/search?q=${encodeURIComponent(q)}`, { /* no credentials unless you need cookies */ });
+
 
 export default function Home(){
   const { data: session, status } = useSession();
@@ -38,6 +40,23 @@ export default function Home(){
   );
 
   const vehicle = data?.vehicle;
+
+  async function runSearch(q: string) {
+  const res = await fetch(`${BACKEND}/api/search?q=${encodeURIComponent(q)}`);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+  // usage
+  <button onClick={async () => {
+    try {
+      const data = await runSearch(q);
+      setResults(data.results || []);
+    } catch (e) { /* handle */ }
+  }}>
+    Search
+  </button>
+
 
   return (
   <Layout>

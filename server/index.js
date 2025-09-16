@@ -9,25 +9,18 @@ import { driver } from "./neo4j.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-const allowList = [
-  "http://localhost:3000",
-  "https://fleet-copilot-new.vercel.app",
-  // add preview domains if you use them, e.g.:
-  // "https://fleet-copilot-new-git-*.vercel.app"
-];
+const list = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map(s => s.trim())
+  .filter(Boolean);
 
 const corsOptions = {
   origin(origin, cb) {
-    // allow non-browser requests (curl/Postman) with no Origin
-    if (!origin) return cb(null, true);
-    const ok = allowList.some((o) =>
-      o.includes("*")
-        ? new RegExp("^" + o.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$").test(origin)
-        : o === origin
-    );
-    cb(ok ? null : new Error("CORS: origin not allowed"), ok);
+    if (!origin) return cb(null, true); // curl/postman
+    const ok = list.includes(origin);
+    cb(ok ? null : new Error("CORS origin not allowed"), ok);
   },
-  credentials: true,
+  credentials: true
 };
 
 app.use((req, res, next) => {

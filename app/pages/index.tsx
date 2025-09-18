@@ -4,7 +4,6 @@ import Card from "../components/Card";
 import axios from "axios";
 import { useEffect, useState } from "react";
 import LangflowChatPanel from "../components/LangflowChat";
-import { error } from "console";
 
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND || process.env.BACKEND_BASE_URL || "http://localhost:4000";
@@ -98,9 +97,9 @@ async function runSearch(q: string) {
     </button>
 
     {/* optional: error banner */}
-    {error && (
+    {console.error && (
       <span className="ml-3 text-sm text-red-600">
-        {String(error)}
+        {String(console.error)}
       </span>
     )}
   </div>

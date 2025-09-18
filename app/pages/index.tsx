@@ -4,10 +4,10 @@ import Card from "../components/Card";
 import axios from "axios";
 import { useEffect, useState } from "react";
 import LangflowChatPanel from "../components/LangflowChat";
+import { error } from "console";
+
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND || process.env.BACKEND_BASE_URL || "http://localhost:4000";
-const r = await fetch(`${BACKEND}/api/search?q=${encodeURIComponent(q)}`, { /* no credentials unless you need cookies */ });
-
 
 export default function Home(){
   const { data: session, status } = useSession();
@@ -15,23 +15,39 @@ export default function Home(){
   const [data, setData] = useState<any>(null);
   const [searchResults, setResults] = useState<any[]>([]);
 
+  // read ?q= from URL on mount
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
-    const query = url.searchParams.get("q");
-    if (query) setQ(query);
+    const query = url.searchParams.get("q") || "";
+    setQ(query);
   }, []);
-
-  useEffect(() => { (async () => {
+  
+  // run search when q changes
+  useEffect(() => {
     if (!q) return;
-    const s = await axios.get(`${BACKEND}/api/search?q=${encodeURIComponent(q)}`);
-    setResults(s.data.results || []);
-    const v = s.data.results.find((r:any) => r.type === "vehicle");
-    if (v?.vin){
-      const vr = await axios.get(`${BACKEND}/api/vehicle/${v.vin}`);
-      setData(vr.data);
-    }
-  })(); }, [q]);
 
+    let cancelled = false;
+    (async () => {
+      try {
+        setError(null);
+        const res = await fetch(
+          `${BACKEND}/api/search?q=${encodeURIComponent(q)}`
+        );
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        const data = await res.json();
+        if (!cancelled) setResults(data.results || []);
+      } catch (e: any) {
+        if (!cancelled) setError(e.message || "Search failed");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [q]);
+
+  
   if (status === "loading") return null;
   if (!session) return (
     <div className="min-h-screen grid place-items-center">
@@ -63,6 +79,33 @@ async function runSearch(q: string) {
 
   return (
   <Layout>
+
+  <div className="mb-4 flex flex-wrap items-center gap-2">
+    <input
+      value={q ?? ""}
+      onChange={(e) => setQ(e.target.value)}
+      placeholder="Search VIN / make / model"
+      className="px-3 py-2 border rounded w-80"
+    />
+    <button
+      onClick={() => {
+        // no-op: typing already sets q and triggers your useEffect
+        // keep this button for UX; optional manual trigger if you move fetch to a click handler
+      }}
+      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+    >
+      Search
+    </button>
+
+    {/* optional: error banner */}
+    {error && (
+      <span className="ml-3 text-sm text-red-600">
+        {String(error)}
+      </span>
+    )}
+  </div>
+
+  {/* your existing grid starts here */}
   <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
     {/* Left Sidebar */}
     <div className="lg:col-span-1">
@@ -161,3 +204,7 @@ export async function getServerSideProps(ctx:any){
   if (!session) return { redirect: { destination: "/login", permanent: false } };
   return { props: { session } };
 }
+function setError(arg0: null) {
+  throw new Error("Function not implemented.");
+}
+

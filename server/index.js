@@ -8,9 +8,10 @@ import evidence from "./routes/evidence.js";
 import { driver } from "./neo4j.js";
 import { searchHandler } from "./routes/search.js";
 
-app.get("/api/search", searchHandler);
-dotenv.config();
 const app = express();
+
+dotenv.config();
+
 const PORT = process.env.PORT || 4000;
 const list = (process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || "http://localhost:3000")
   .split(",")
@@ -29,21 +30,14 @@ const corsOptions = {
 };
 
 
-// 6) Centralized error handler that STILL sends CORS
-app.use((err, req, res, next) => {
-  // echo the allowed origin so the browser can see the error
-  const origin = req.headers.origin;
-  if (origin && list.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  }
-  // send normalized JSON error
-  const status = err.status || 500;
-  res.status(status).json({
-    error: err.message || "Server error",
-    detail: process.env.NODE_ENV === "production" ? undefined : String(err?.stack || err)
-  });
+// vary by origin to keep proxies/caches honest
+app.use((req, res, next) => {
+  res.setHeader("Vary", "Origin");
+  next();
 });
+
+// global CORS before routes
+// (removed duplicate corsOptions declaration)
 
 // 4) Apply CORS globally, before JSON parser and routes
 app.use(cors(corsOptions));
@@ -54,6 +48,22 @@ app.options("*", cors(corsOptions), (req, res) => res.sendStatus(200));
 
 // ---- your routes below ----
 app.get("/health", (req, res) => res.status(200).send("ok"));
+
+app.get("/api/search", searchHandler);
+
+// centralized error handler (keeps CORS on errors)
+app.use((err, req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && list.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+  const status = err.status || 500;
+  res.status(status).json({
+    error: err.message || "Server error",
+    detail: process.env.NODE_ENV === "production" ? undefined : String(err?.stack || err),
+  });
+});
 
 // ... your routes ...
 app.listen(PORT, () => {

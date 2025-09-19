@@ -4,9 +4,9 @@ import Card from "../components/Card";
 import axios from "axios";
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-const LangflowChatPanel = dynamic(() => import("../components/LangflowChat"), {
-  ssr: false,
-});
+//const LangflowChatPanel = dynamic(() => import("../components/LangflowChat"), {
+//  ssr: false,
+//});
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND || process.env.BACKEND_BASE_URL || "http://localhost:4000";
 
 export default function Home(){
@@ -136,7 +136,7 @@ async function runSearch(q: string) {
         )}
       </Card>
       <div className="mt-8">
-      <LangflowChatPanel />
+        
       </div>
     </div>
 

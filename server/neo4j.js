@@ -1,49 +1,28 @@
 // server/neo4j.js
+import "dotenv/config"; // safe even if index.js already loaded it
 import neo4j from "neo4j-driver";
-import dotenv from "dotenv";
-import { fileURLToPath } from "url";
-import path from "path";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.join(__dirname, ".env") });
+const uri = process.env.NEO4J_URI;
+const user = process.env.NEO4J_USER;
+const password = process.env.NEO4J_PASSWORD;
 
-function requireEnv(name) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env ${name} in server/.env`);
-  return v;
+if (!uri || !user || !password) {
+  console.error("[neo4j] Missing env vars NEO4J_URI / NEO4J_USER / NEO4J_PASSWORD");
 }
 
-const uri = requireEnv("NEO4J_URI");
-const user = requireEnv("NEO4J_USER");
-const password = requireEnv("NEO4J_PASSWORD");
-
-export const driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
-
-/** Recursively convert Neo4j Integers and nested structures to plain JS */
-function toNative(value) {
-  if (!value) return value;
-
-  // Neo4j Integer objects have a toNumber() function
-  if (typeof value.toNumber === "function") return value.toNumber();
-
-  // Arrays
-  if (Array.isArray(value)) return value.map(toNative);
-
-  // Plain objects
-  if (typeof value === "object") {
-    const out = {};
-    for (const [k, v] of Object.entries(value)) out[k] = toNative(v);
-    return out;
-  }
-  return value;
-}
+export const driver = neo4j.driver(uri, neo4j.auth.basic(user, password), {
+  // optional tuning
+  // encrypted: "ENCRYPTION_ON"
+});
 
 export async function runQuery(cypher, params = {}) {
   const session = driver.session();
   try {
     const res = await session.run(cypher, params);
-    return res.records.map(r => toNative(r.toObject()));
+    return res; // always return the result object
+  } catch (err) {
+    console.error("[neo4j] query error:", err);
+    throw err; // let the route error handler respond with 500 JSON
   } finally {
     await session.close();
   }

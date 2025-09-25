@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+
 import dotenv from "dotenv";
 import search from "./routes/search.js";     // default export Router
 import vehicle from "./routes/vehicle.js";   // default export Router
@@ -18,6 +19,11 @@ dotenv.config({ path: path.join(__dirname, ".env") });
 const app = express();
 
 // build your allow-list once
+const origins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
 const allowList = (process.env.ALLOWED_ORIGINS || "http://localhost:3000")
   .split(",")
   .map(s => s.trim())
@@ -46,6 +52,15 @@ app.use((req, res, next) => {
 
 // CORS must be BEFORE routes
 app.use(cors(corsOptionsDelegate));
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);               // allow curl/postman
+    if (origins.includes(origin)) return cb(null, true);
+    return cb(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  credentials: false
+}));
+
 // Answer all preflights
 app.options("*", cors(corsOptionsDelegate));
 
@@ -76,8 +91,11 @@ app.use((err, req, res, _next) => {
   res.status(err.status || 500).json({ error: err.message || "Server error" });
 });
 
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+const port = process.env.PORT || 4000;
+app.listen(port, () => {
+  console.log(`Backend running on port ${port}`);
+});
+
 
 (async () => {
   try { await driver.verifyConnectivity(); console.log(`[Neo4j] Connected to ${process.env.NEO4J_URI}`); }

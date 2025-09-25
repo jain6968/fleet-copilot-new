@@ -7,6 +7,7 @@ import evidence from "./routes/evidence.js"; // default export Router
 import { driver } from "./neo4j.js";
 import path from "path";
 import { fileURLToPath } from "url";
+import langflow from "./routes/langflow.js";
 
 dotenv.config();
 
@@ -15,16 +16,49 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, ".env") });
 const app = express();
+
+// build your allow-list once
 const allowList = (process.env.ALLOWED_ORIGINS || "http://localhost:3000")
-  .split(",").map(s=>s.trim()).filter(Boolean);
+  .split(",")
+  .map(s => s.trim())
+  .filter(Boolean);
+
+// robust CORS options (works for localhost & Render)
+const corsOptionsDelegate = (req, cb) => {
+  const origin = req.headers.origin;
+  // allow non-browser (no Origin) like curl/Postman
+  if (!origin) return cb(null, { origin: false });
+
+  const isAllowed = allowList.includes(origin);
+  cb(null, {
+    origin: isAllowed,
+    credentials: true,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  });
+};
+
+// make caches vary by Origin so the right CORS headers are served
+app.use((req, res, next) => {
+  res.setHeader("Vary", "Origin");
+  next();
+});
+
+// CORS must be BEFORE routes
+app.use(cors(corsOptionsDelegate));
+// Answer all preflights
+app.options("*", cors(corsOptionsDelegate));
 
 app.use((_, res, next) => { res.setHeader("Vary", "Origin"); next(); });
+app.use("/api/langflow", langflow);
 app.use(cors({
   origin(origin, cb){ if(!origin) return cb(null,true); cb(null, allowList.includes(origin)); },
   credentials: true
 }));
 app.options("*", cors());
 app.use(express.json());
+
+
 
 app.get("/health", (_req, res) => res.status(200).send("ok"));
 

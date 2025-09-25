@@ -1,54 +1,99 @@
+// server/routes/vehicle.js
 import { Router } from "express";
 import { runQuery } from "../neo4j.js";
 
 const router = Router();
 
-router.get("/:vin", async (req, res) => {
+router.get("/:vin", async (req, res, next) => {
   try {
     const vin = req.params.vin.toString().trim();
 
-    // One-statement, Aura-safe query:
-    // - Returns a single "current" DTC (if present) and its evidences
-    // - Projects repairs as an array of maps
-    const cypher = `
-      MATCH (v:Vehicle {vin:$vin})
-      OPTIONAL MATCH (v)-[:HAS_REPAIR]->(r:Repair)
-      WITH v, collect(DISTINCT {id:r.id, name:r.name, date:r.date}) AS repairs
+const cypher = `
+  MATCH (v:Vehicle {vin:$vin})
 
-      OPTIONAL MATCH (v)-[:HAS_DTC]->(d:DTC)
-      WITH v, repairs, d
-      ORDER BY d.code ASC
-      WITH v, repairs, head(collect(d)) AS curDtc
+  // Repairs
+  OPTIONAL MATCH (v)-[:HAS_REPAIR]->(r:Repair)
+  WITH v, collect(DISTINCT {
+    id:   r.id,
+    name: r.name,
+    date: r.date
+  }) AS repairs
 
-      OPTIONAL MATCH (curDtc)-[:HAS_EVIDENCE]->(e:Evidence)
-      WITH v, repairs, curDtc,
-           collect(DISTINCT {id:e.id, type:e.type, title:e.title, summary:e.summary}) AS evidences
-      RETURN v{.*, repairs:repairs} AS vehicle,
-             curDtc.code AS currentDTC,
-             evidences
-    `;
+  // DTCs
+  OPTIONAL MATCH (v)-[:HAS_DTC]->(d:DTC)
+  WITH v, repairs, collect(DISTINCT d) AS dtcs
 
-    const row = (await runQuery(cypher, { vin }))[0] || {};
-    const vehicle = row?.vehicle || null;
-    const currentDTC = row?.currentDTC || null;
-    const evidences = row?.evidences || [];
+  // Evidence via DTC  -> aggregate to a list
+  OPTIONAL MATCH (d)-[:HAS_EVIDENCE]->(e1:Evidence)
+  WITH v, repairs, dtcs, collect(DISTINCT e1) AS ev_from_dtc
 
-    // Simple demo diagnosis (expand with your rules/RAG later)
-    let diagnosis = null;
-    if (currentDTC === "P20EE") {
-      diagnosis = {
-        title: "NOx Sensor Failure",
-        confidence: 0.82,
-        summary:
-          "Abnormal NOx readings combined with DTC P20EE suggest the NOx sensor is likely failing.",
-        nextSteps: ["Run NOx sensor self-test", "Inspect NOx sensor wiring"]
-      };
-    }
+  // Evidence directly on Vehicle -> aggregate to another list
+  OPTIONAL MATCH (v)-[:HAS_EVIDENCE]->(e2:Evidence)
+  WITH v, repairs, dtcs, ev_from_dtc, collect(DISTINCT e2) AS ev_from_vehicle
 
-    res.json({ vehicle, currentDTC, diagnosis, evidences });
+  // Now concatenate lists WITHOUT any further aggregation
+  WITH v, repairs, dtcs, (ev_from_dtc + ev_from_vehicle) AS allEvsRaw
+
+  // Project evidence safely
+  WITH v, repairs, dtcs,
+       [ev IN allEvsRaw WHERE ev IS NOT NULL |
+         ev{
+           .id,
+           .type,
+           .title,
+           .summary,
+           lastAction:   ev.lastAction,
+           lastActionBy: ev.lastActionBy,
+           lastActionAt: ev.lastActionAt
+         }
+       ] AS evidences
+
+  // Operator (optional)
+  OPTIONAL MATCH (v)-[:OPERATED_BY]->(o:Operator)
+  WITH v, repairs, dtcs, evidences,
+       o{ .name, city: o.city, postcode: o.postcode } AS operator
+
+  // Choose a current DTC (first for now)
+  WITH v, repairs, evidences, operator, dtcs,
+       head([x IN dtcs | x.code]) AS currentDTC,
+       dtcs AS allDTCs
+
+  RETURN
+    v{
+      .vin, .make, .model, .year, .miles,
+      licensePlate: v.licensePlate,
+      vehicleType:  v.vehicleType,
+      repairs: repairs
+    } AS vehicle,
+    operator,
+    currentDTC,
+    CASE WHEN currentDTC IS NOT NULL
+      THEN {
+        title: 'Likely issue ' + currentDTC,
+        confidence: 0.72,
+        summary: coalesce(head([x IN allDTCs WHERE x.code = currentDTC | x.description]), 'Based on DTC & evidence.'),
+        nextSteps: ['Run sensor self-test','Inspect wiring','Check relevant TSB']
+      }
+      ELSE null END AS diagnosis,
+    [x IN allDTCs | x{ .code, .description }] AS dtcs,
+    evidences
+`;
+
+
+    const result = await runQuery(cypher, { vin });
+    const rec = result.records?.[0];
+    if (!rec) return res.status(404).json({ error: "Vehicle not found" });
+
+    res.json({
+      vehicle: rec.get("vehicle"),
+      operator: rec.get("operator"),
+      currentDTC: rec.get("currentDTC"),
+      diagnosis: rec.get("diagnosis"),
+      dtcs: rec.get("dtcs"),
+      evidences: rec.get("evidences")
+    });
   } catch (err) {
-    console.error("[vehicle] error:", err);
-    res.status(500).json({ error: "Vehicle lookup failed", detail: String(err) });
+    next(err);
   }
 });
 

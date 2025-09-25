@@ -1,246 +1,146 @@
-import { useSession } from "next-auth/react";
-import Layout from "../components/Layout";
-import Card from "../components/Card";
-import axios from "axios";
-import { useEffect, useState } from "react";
-// If you re-enable Langflow, import dynamically with ssr:false to avoid hydration issues:
-// import dynamic from "next/dynamic";
-// const LangflowChatPanel = dynamic(() => import("../components/LangflowChatPanel"), { ssr: false });
+import { useState } from "react";
 
-const BACKEND =
-  process.env.NEXT_PUBLIC_BACKEND ||
-  process.env.BACKEND_BASE_URL ||
-  "http://localhost:4000";
+type Repair = { id?: string; name?: string; date?: string | null };
+type Evidence = { id?: string; type?: string; title?: string; summary?: string; lastAction?: string; lastActionBy?: string; lastActionAt?: string };
+type Diagnosis = { title: string; confidence?: number; summary?: string; nextSteps?: string[] };
+type Vehicle = { vin: string; make?: string; model?: string; year?: number; miles?: number; licensePlate?: string; vehicleType?: string; repairs?: Repair[] };
+type DetailResponse = {
+  vehicle?: Vehicle;
+  operator?: { name?: string; city?: string; postcode?: string } | null;
+  currentDTC?: string | null;
+  diagnosis?: Diagnosis | null;
+  dtcs?: { code?: string; description?: string }[];
+  evidences?: Evidence[];
+};
+
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_BASE_URL || "http://localhost:4000";
+const looksLikeVIN = (s: string) => /^[A-HJ-NPR-Z0-9]{11,17}$/i.test(s);
 
 export default function Home() {
-  const { data: session, status } = useSession();
+  const [query, setQuery] = useState("");
+  const [data, setData] = useState<DetailResponse | null>(null);
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  // ---- state ----
-  const [q, setQ] = useState<string>("");
-  const [data, setData] = useState<any>(null);
-  const [searchResults, setResults] = useState<any[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  async function runSearch(q: string) {
+    setLoading(true);
+    setErr(null);
 
-  // read ?q= from URL on mount (optional)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    const query = url.searchParams.get("q") || "";
-    setQ(query);
-  }, []);
+    try {
+      // 1) Direct VIN details
+      if (looksLikeVIN(q)) {
+        const resp = await fetch(`${BACKEND}/api/vehicle/${encodeURIComponent(q)}`);
+        if (resp.ok) setData(await resp.json());
+      }
 
-  // run search when q changes
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setError(null);
-        if (!q) {
-          setResults([]);
-          setData(null);
-          return;
-        }
+      // 2) Normal search (to fill list)
+      const sr = await fetch(`${BACKEND}/api/search?q=${encodeURIComponent(q)}`);
+      const sData = sr.ok ? await sr.json() : { results: [] };
+      setResults(sData.results || []);
 
-        const s = await fetch(`${BACKEND}/api/search?q=${encodeURIComponent(q)}`);
-        if (!s.ok) throw new Error(`${s.status} ${s.statusText}`);
-        const sData = await s.json();
-
-        if (cancelled) return;
-        setResults(sData.results || []);
-
-        const v = (sData.results || []).find((r: any) => r.type === "vehicle");
+      // 3) Fallback to first vehicle hit for details
+      if (!looksLikeVIN(q)) {
+        const v = (sData.results || []).find((r: any) => r.type === "vehicle" && r.vin);
         if (v?.vin) {
-          const vr = await fetch(`${BACKEND}/api/vehicle/${v.vin}`);
-          if (!vr.ok) throw new Error(`${vr.status} ${vr.statusText}`);
-          const vrData = await vr.json();
-          if (!cancelled) setData(vrData);
+          const vr = await fetch(`${BACKEND}/api/vehicle/${encodeURIComponent(v.vin)}`);
+          if (vr.ok) setData(await vr.json());
         } else {
           setData(null);
         }
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Search failed");
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [q]);
-
-  if (status === "loading") return null;
-  if (!session)
-    return (
-      <div className="min-h-screen grid place-items-center">
-        <a className="px-4 py-2 bg-blue-600 text-white rounded" href="/login">
-          Sign in
-        </a>
-      </div>
-    );
-
-  const vehicle = data?.vehicle;
+    } catch (e: any) {
+      setErr(e?.message || "Search failed");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <Layout>
-      {/* Top search bar + error */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+    <main style={{ padding: 24 }}>
+      <h1>Fleet Search</h1>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          runSearch(query.trim());
+        }}
+      >
         <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search VIN / make / model"
-          className="px-3 py-2 border rounded w-80"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search VIN, plate, make/model…"
+          style={{ padding: 8, width: 420 }}
         />
-        <button
-          onClick={() => {
-            // typing already updates q and triggers the effect
-          }}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          Search
-        </button>
-        {error && (
-          <span className="ml-3 text-sm text-red-600">
-            {error}
-          </span>
-        )}
-      </div>
+        <button type="submit" style={{ marginLeft: 8 }}>Search</button>
+      </form>
 
-      {/* Three-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left Sidebar: Vehicle Overview */}
-        <div className="lg:col-span-1">
-          <Card title="Vehicle Overview">
-            {vehicle ? (
-              <div className="space-y-2 text-sm">
-                <div>
-                  <b>VIN:</b> {vehicle.vin}
-                </div>
-                <div>
-                  {vehicle.make} {vehicle.model}
-                </div>
-                <div>{vehicle.year}</div>
-                <div>{vehicle.miles?.toLocaleString()} miles</div>
-                <div className="mt-4">
-                  <b>Current DTC</b>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span>!</span>
-                    <span>{data?.currentDTC || "—"}</span>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <b>History</b>
-                  <ul className="list-disc ml-5">
-                    {(vehicle.repairs || []).slice(0, 3).map((r: any) => (
-                      <li key={r.id}>
-                        {r.name} <span className="text-gray-500">({r.date})</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            ) : (
-              <div className="text-gray-500 text-sm">Search to load a vehicle…</div>
-            )}
-          </Card>
+      {loading && <div style={{ marginTop: 12 }}>Searching…</div>}
+      {err && <div style={{ marginTop: 12, color: "crimson" }}>{err}</div>}
 
-          {/* If you want the Langflow chat here, re-enable with dynamic import */}
-          {/* <div className="mt-8">
-            <LangflowChatPanel />
-          </div> */}
+      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginTop: 24 }}>
+        {/* Vehicle Overview */}
+        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
+          <h3>Vehicle Overview</h3>
+          {data?.vehicle ? (
+            <>
+              <div><b>VIN:</b> {data.vehicle.vin}</div>
+              <div><b>Model:</b> {data.vehicle.make} {data.vehicle.model} {data.vehicle.year}</div>
+              <div><b>Plate:</b> {data.vehicle.licensePlate || "—"}</div>
+              <div><b>Miles:</b> {data.vehicle.miles ?? "—"}</div>
+              <div><b>Repairs:</b> {data.vehicle.repairs?.length ?? 0}</div>
+            </>
+          ) : (
+            <div>No vehicle selected.</div>
+          )}
         </div>
 
-        {/* Center Content: Evidences */}
-        <div className="lg:col-span-3 space-y-6">
-          <div className="grid md:grid-cols-2 gap-4">
-            {(data?.evidences || []).map((e: any) => (
-              <Card key={e.id} title={`${e.title}`}>
-                <p className="text-sm mb-3">{e.summary}</p>
-                <div className="flex gap-2">
-                  <a
-                    className="px-3 py-1 border rounded"
-                    href="#"
-                    onClick={(ev) => {
-                      ev.preventDefault();
-                      alert("Open evidence viewer TBD");
-                    }}
-                  >
-                    View Evidence
-                  </a>
-                  <button
-                    className="px-3 py-1 bg-green-600 text-white rounded"
-                    onClick={async () => {
-                      await axios.post(`${BACKEND}/api/evidence/${e.id}/action`, {
-                        action: "accept",
-                        user: (session?.user as any)?.email,
-                      });
-                      alert("Accepted");
-                    }}
-                  >
-                    Accept
-                  </button>
-                  <button
-                    className="px-3 py-1 bg-gray-200 rounded"
-                    onClick={async () => {
-                      await axios.post(`${BACKEND}/api/evidence/${e.id}/action`, {
-                        action: "reject",
-                        user: (session?.user as any)?.email,
-                      });
-                      alert("Rejected");
-                    }}
-                  >
-                    Reject
-                  </button>
-                </div>
-              </Card>
-            ))}
-          </div>
+        {/* Evidence */}
+        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
+          <h3>Evidence</h3>
+          {data?.evidences?.length ? (
+            <ul>
+              {data.evidences.map((e) => (
+                <li key={e.id}>
+                  <b>{e.title || e.type || e.id}</b> — {e.summary || "—"}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div>No evidence.</div>
+          )}
         </div>
 
-        {/* Right Sidebar: AI Diagnostics */}
-        <div className="lg:col-span-1">
-          <Card title="AI Diagnostics">
-            {data?.diagnosis ? (
-              <div>
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xl font-semibold">{data.diagnosis.title}</h4>
-                  <span className="text-sm">shield</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded mt-2">
-                  <div
-                    className="h-3 bg-gray-600 rounded"
-                    style={{ width: `${Math.round(data.diagnosis.confidence * 100)}%` }}
-                  />
-                </div>
-                <p className="text-sm mt-2">{data.diagnosis.summary}</p>
-                <div className="mt-3">
-                  <b>Suggested Next Steps</b>
-                  <ul className="list-disc ml-5 text-sm">
-                    {data.diagnosis.nextSteps.map((s: string, i: number) => (
-                      <li key={i}>{s}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            ) : (
-              <div className="text-gray-500 text-sm">No diagnosis yet.</div>
-            )}
-          </Card>
+        {/* AI Diagnostics */}
+        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
+          <h3>AI Diagnostics</h3>
+          {data?.diagnosis ? (
+            <>
+              <div><b>{data.diagnosis.title}</b></div>
+              <div>{data.diagnosis.summary}</div>
+              {data.diagnosis.nextSteps?.length ? (
+                <ul>
+                  {data.diagnosis.nextSteps.map((s, i) => <li key={i}>{s}</li>)}
+                </ul>
+              ) : null}
+            </>
+          ) : (
+            <div>No diagnostics.</div>
+          )}
         </div>
-      </div>
+      </section>
 
-      {q && (
-        <div className="mt-8">
-          <h3 className="text-sm text-gray-600 mb-2">Search results for "{q}"</h3>
-          <pre className="text-xs bg-white p-3 rounded border overflow-auto">
-            {JSON.stringify(searchResults, null, 2)}
-          </pre>
-        </div>
-      )}
-    </Layout>
+      {/* Search Results List */}
+      <section style={{ marginTop: 24 }}>
+        <h3>Results</h3>
+        <ul>
+          {results.map((r, i) => (
+            <li key={i}>
+              {r.type} — {r.vin || r.code || r.id || r.title}
+            </li>
+          ))}
+        </ul>
+      </section>
+    </main>
   );
-}
-
-export async function getServerSideProps(ctx: any) {
-  const { getSession } = await import("next-auth/react");
-  const session = await getSession(ctx);
-  if (!session) return { redirect: { destination: "/login", permanent: false } };
-  return { props: { session } };
 }

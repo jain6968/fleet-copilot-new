@@ -227,6 +227,7 @@ export default function Home() {
             <>
               <div><b>{data.diagnosis.title}</b></div>
               <div>{data.diagnosis.summary}</div>
+              <div><h4><b>Suggested Next Steps</b></h4></div>
               {data.diagnosis.nextSteps?.length ? (
                 <ul>
                   {data.diagnosis.nextSteps.map((s, i) => <li key={i}>{s}</li>)}
@@ -237,7 +238,7 @@ export default function Home() {
             <div>No diagnostics.</div>
           )}
         </div>
-        
+
         {/* Evidence (with Accept/Reject) */}
         <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
           <h3>Evidence</h3>

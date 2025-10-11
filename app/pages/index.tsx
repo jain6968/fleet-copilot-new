@@ -1,5 +1,5 @@
 // pages/index.tsx
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 /* ---------- Types ---------- */
 type Repair = { id?: string; name?: string; date?: string | null };
@@ -27,25 +27,6 @@ type DetailResponse = {
 
 /* ---------- Env ---------- */
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_BASE_URL || "http://localhost:4000";
-const LANGFLOW_HOST = process.env.NEXT_PUBLIC_LANGFLOW_HOST_URL || "";
-const LANGFLOW_FLOW_ID = process.env.NEXT_PUBLIC_LANGFLOW_FLOW_ID || "";
-
-/* ---------- <langflow-chat> custom element typing ---------- */
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      "langflow-chat": React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
-        window_title?: string;
-        host_url: string;
-        flow_id: string;
-        chat_position?: "bottom-right" | "bottom-left" | "inline";
-        theme?: "light" | "dark";
-        session_id?: string;
-        tweaks?: string | Record<string, any>;
-      };
-    }
-  }
-}
 
 /* ---------- Helpers ---------- */
 const looksLikeVIN = (s: string) => /^[A-HJ-NPR-Z0-9]{11,17}$/i.test(s);
@@ -152,32 +133,6 @@ function EvidenceRow({
   );
 }
 
-/* ---------- Langflow Chat loader ---------- */
-function LangflowChat() {
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const existing = document.querySelector<HTMLScriptElement>('script[src*="langflow-embedded-chat"]');
-    if (existing) return;
-    const s = document.createElement("script");
-    s.src =
-      "https://cdn.jsdelivr.net/gh/logspace-ai/langflow-embedded-chat@v1.0.7/dist/build/static/js/bundle.min.js";
-    s.async = true;
-    document.body.appendChild(s);
-  }, []);
-
-  if (!LANGFLOW_HOST || !LANGFLOW_FLOW_ID) return null;
-
-  return (
-    <langflow-chat
-      window_title="Simple Agent"
-      host_url={LANGFLOW_HOST}           // <- your Render proxy, e.g. https://<render>.onrender.com/langflow
-      flow_id={LANGFLOW_FLOW_ID}         // <- a5827591-b2bc-4416-914d-90c87cc59314
-      chat_position="bottom-right"
-      theme="light"
-    />
-  );
-}
-
 /* ---------- Main page ---------- */
 export default function Home() {
   const [query, setQuery] = useState("");
@@ -200,16 +155,13 @@ export default function Home() {
     setLoading(true);
     setErr(null);
     try {
-      // fast path: VIN detail
       if (looksLikeVIN(q)) {
         const resp = await fetch(`${BACKEND}/api/vehicle/${encodeURIComponent(q)}`);
         if (resp.ok) setData(await resp.json());
       }
-      // search list
       const sr = await fetch(`${BACKEND}/api/search?q=${encodeURIComponent(q)}`);
       const sData = sr.ok ? await sr.json() : { results: [] };
       setResults(sData.results || []);
-      // fallback details from first vehicle hit
       if (!looksLikeVIN(q)) {
         const v = (sData.results || []).find((r: any) => r.type === "vehicle" && r.vin);
         if (v?.vin) {
@@ -268,6 +220,20 @@ export default function Home() {
           )}
         </div>
 
+        {/* Evidence (with Accept/Reject) */}
+        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
+          <h3>Evidence</h3>
+          {data?.evidences?.length ? (
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {data.evidences.map((e) => (
+                <EvidenceRow key={e.id || Math.random()} ev={e} onPatched={patchEvidenceInState} />
+              ))}
+            </ul>
+          ) : (
+            <div>No evidence.</div>
+          )}
+        </div>
+
         {/* AI Diagnostics */}
         <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
           <h3>AI Diagnostics</h3>
@@ -285,22 +251,6 @@ export default function Home() {
             <div>No diagnostics.</div>
           )}
         </div>
-
-        
-        {/* Evidence (with Accept/Reject) */}
-        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-          <h3>Evidence</h3>
-          {data?.evidences?.length ? (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {data.evidences.map((e) => (
-                <EvidenceRow key={e.id || Math.random()} ev={e} onPatched={patchEvidenceInState} />
-              ))}
-            </ul>
-          ) : (
-            <div>No evidence.</div>
-          )}
-        </div>
-
       </section>
 
       {/* Results list */}
@@ -314,9 +264,6 @@ export default function Home() {
           ))}
         </ul>
       </section>
-
-      {/* Langflow chat (floating) */}
-      <LangflowChat />
     </main>
   );
 }

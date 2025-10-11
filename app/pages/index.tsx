@@ -220,20 +220,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Evidence (with Accept/Reject) */}
-        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-          <h3>Evidence</h3>
-          {data?.evidences?.length ? (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {data.evidences.map((e) => (
-                <EvidenceRow key={e.id || Math.random()} ev={e} onPatched={patchEvidenceInState} />
-              ))}
-            </ul>
-          ) : (
-            <div>No evidence.</div>
-          )}
-        </div>
-
         {/* AI Diagnostics */}
         <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
           <h3>AI Diagnostics</h3>
@@ -251,6 +237,21 @@ export default function Home() {
             <div>No diagnostics.</div>
           )}
         </div>
+        
+        {/* Evidence (with Accept/Reject) */}
+        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
+          <h3>Evidence</h3>
+          {data?.evidences?.length ? (
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {data.evidences.map((e) => (
+                <EvidenceRow key={e.id || Math.random()} ev={e} onPatched={patchEvidenceInState} />
+              ))}
+            </ul>
+          ) : (
+            <div>No evidence.</div>
+          )}
+        </div>
+
       </section>
 
       {/* Results list */}

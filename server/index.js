@@ -8,7 +8,7 @@ import evidence from "./routes/evidence.js"; // default export Router
 import { driver } from "./neo4j.js";
 import path from "path";
 import { fileURLToPath } from "url";
-import langflow from "./routes/langflow.js";
+import langflowRoutes from "./routes/langflow.js";
 
 dotenv.config();
 
@@ -65,7 +65,6 @@ app.use(cors({
 app.options("*", cors(corsOptionsDelegate));
 
 app.use((_, res, next) => { res.setHeader("Vary", "Origin"); next(); });
-app.use("/api/langflow", langflow);
 app.use(cors({
   origin(origin, cb){ if(!origin) return cb(null,true); cb(null, allowList.includes(origin)); },
   credentials: true
@@ -74,9 +73,8 @@ app.options("*", cors());
 app.use(express.json());
 
 
-
 app.get("/health", (_req, res) => res.status(200).send("ok"));
-
+app.use('/api/langflow', langflowRoutes);
 app.use("/api/search", search);
 app.use("/api/vehicle", vehicle);
 app.use("/api/evidence", evidence);

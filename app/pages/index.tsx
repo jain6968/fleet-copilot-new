@@ -1,5 +1,7 @@
 // pages/index.tsx
 import { useState } from "react";
+import dynamic from 'next/dynamic';
+
 
 /* ---------- Types ---------- */
 type Repair = { id?: string; name?: string; date?: string | null };
@@ -24,6 +26,11 @@ type DetailResponse = {
   dtcs?: { code?: string; description?: string }[];
   evidences?: Evidence[];
 };
+
+const LangflowChatPanel = dynamic(
+  () => import("../components/LangflowChatPanel"), // adjust the path if needed
+  { ssr: false }
+);
 
 /* ---------- Env ---------- */
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_BASE_URL || "http://localhost:4000";
@@ -253,6 +260,9 @@ export default function Home() {
           )}
         </div>
 
+      </section>
+      <section style={{ marginTop: 24 }}>
+        <LangflowChatPanel />
       </section>
 
       {/* Results list */}

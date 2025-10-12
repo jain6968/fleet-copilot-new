@@ -124,7 +124,7 @@ export default function LangflowChatPanel() {
 
   return (
     <div className="p-4 border rounded bg-white shadow">
-      <h2 className="text-lg font-semibold mb-2">Langflow Chat</h2>
+      <h2 className="text-lg font-semibold mb-2">AI Chat Assistant</h2>
 
       <div className="flex gap-2">
         <input

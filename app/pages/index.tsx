@@ -213,7 +213,7 @@ export default function Home() {
       <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
         {/* Vehicle Overview */}
         <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-          <h3>Vehicle Overview</h3>
+          <h3><b>Vehicle Overview</b></h3>
           {data?.vehicle ? (
             <>
               <div><b>VIN:</b> {data.vehicle.vin}</div>
@@ -221,19 +221,42 @@ export default function Home() {
               <div><b>Plate:</b> {data.vehicle.licensePlate || "—"}</div>
               <div><b>Miles:</b> {data.vehicle.miles ?? "—"}</div>
               <div><b>Repairs:</b> {data.vehicle.repairs?.length ?? 0}</div>
+              <div>{data.diagnosis.title}</div>
             </>
           ) : (
             <div>No vehicle selected.</div>
           )}
         </div>
 
-        {/* AI Diagnostics */}
+        {/* AIDiagnostics */}
         <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-          <h3>AI Diagnostics</h3>
+          <h3><b>Diagnosis</b></h3>
           {data?.diagnosis ? (
             <>
-              <div><b>{data.diagnosis.title}</b></div>
+              <div>{data.diagnosis.title}</div>
               <div>{data.diagnosis.summary}</div>
+            </>
+          ) : (
+            <div>No diagnostics.</div>
+          )}
+          <div style={{ marginBottom: 20 }}></div>
+          <h3><b>Evidence</b></h3>
+          {data?.evidences?.length ? (
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {data.evidences.map((e) => (
+                <EvidenceRow key={e.id || Math.random()} ev={e} onPatched={patchEvidenceInState} />
+              ))}
+            </ul>
+          ) : (
+            <div>No evidence.</div>
+          )}
+
+        </div>
+
+        {/* Evidence (with Accept/Reject) */}
+        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
+          {data?.diagnosis ? (
+            <>
               <div><h4><b>Suggested Next Steps</b></h4></div>
               {data.diagnosis.nextSteps?.length ? (
                 <ul>
@@ -244,38 +267,12 @@ export default function Home() {
           ) : (
             <div>No diagnostics.</div>
           )}
-        </div>
-
-        {/* Evidence (with Accept/Reject) */}
-        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-          <h3>Evidence</h3>
-          {data?.evidences?.length ? (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {data.evidences.map((e) => (
-                <EvidenceRow key={e.id || Math.random()} ev={e} onPatched={patchEvidenceInState} />
-              ))}
-            </ul>
-          ) : (
-            <div>No evidence.</div>
-          )}
+          <div style={{ marginBottom: 20 }}></div>
+            <LangflowChatPanel />
         </div>
 
       </section>
-      <section style={{ marginTop: 24 }}>
-        <LangflowChatPanel />
-      </section>
 
-      {/* Results list */}
-      <section style={{ marginTop: 24 }}>
-        <h3>Results</h3>
-        <ul>
-          {results.map((r, i) => (
-            <li key={i}>
-              {r.type} — {r.vin || r.code || r.id || r.title}
-            </li>
-          ))}
-        </ul>
-      </section>
     </main>
   );
 }

@@ -15,7 +15,7 @@ router.post('/:id/accept', async (req, res, next) => {
     const by = (req.body?.by || 'ui').toString();
 
     const cypher = `
-      MATCH (e:Evidence {id:$id})
+      MATCH (e:Diagnosis {id:$id})
       SET e.status = 'accepted',
           e.lastAction = 'accepted',
           e.lastActionBy = $by,
@@ -50,7 +50,7 @@ router.post('/:id/reject', async (req, res, next) => {
     if (!comment) return res.status(400).json({ error: 'comment required' });
 
     const cypher = `
-      MATCH (e:Evidence {id:$id})
+      MATCH (e:Diagnosis {id:$id})
       SET e.status = 'rejected',
           e.lastAction = 'rejected',
           e.rejectionComment = $comment,

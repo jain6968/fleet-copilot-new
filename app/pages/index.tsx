@@ -39,7 +39,7 @@ const BACKEND = process.env.NEXT_PUBLIC_BACKEND_BASE_URL || "http://localhost:40
 const looksLikeVIN = (s: string) => /^[A-HJ-NPR-Z0-9]{11,17}$/i.test(s);
 
 /* ---------- Evidence Row Component ---------- */
-function EvidenceRow({ ev }: { ev: Evidence }) {
+function EvidenceRow({ ev, onPatched }: { ev: Evidence; onPatched?: (patch: Partial<Evidence> & { id?: string }) => void }) {
   return (
     <li style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #eee" }}>
       <div><b>{ev.title || ev.type || ev.id}</b></div>

@@ -39,109 +39,21 @@ const BACKEND = process.env.NEXT_PUBLIC_BACKEND_BASE_URL || "http://localhost:40
 const looksLikeVIN = (s: string) => /^[A-HJ-NPR-Z0-9]{11,17}$/i.test(s);
 
 /* ---------- Evidence Row Component ---------- */
-function EvidenceRow({
-  ev,
-  onPatched,
-}: {
-  ev: Evidence;
-  onPatched: (patch: Partial<Evidence> & { id?: string }) => void;
-}) {
-  const [showReject, setShowReject] = useState(false);
-  const [comment, setComment] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const accept = async () => {
-    if (!ev.id) return setMsg("Missing evidence id");
-    setBusy(true);
-    setMsg(null);
-    try {
-      const r = await fetch(`${BACKEND}/api/evidence/${encodeURIComponent(ev.id)}/accept`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ by: "ui" }),
-      });
-      const j = await r.json();
-      if (r.ok) {
-        setMsg("thanks"); // as requested
-        onPatched({ id: ev.id, status: "accepted", lastAction: "accepted" });
-      } else {
-        setMsg(j?.error || "Failed to accept");
-      }
-    } catch (e: any) {
-      setMsg(e?.message || "Network error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submitReject = async () => {
-    if (!ev.id) return setMsg("Missing evidence id");
-    if (!comment.trim()) return setMsg("Please enter a comment");
-    setBusy(true);
-    setMsg(null);
-    try {
-      const r = await fetch(`${BACKEND}/api/evidence/${encodeURIComponent(ev.id)}/reject`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ by: "ui", comment }),
-      });
-      const j = await r.json();
-      if (r.ok) {
-        setMsg("Saved");
-        onPatched({ id: ev.id, status: "rejected", lastAction: "rejected", rejectionComment: comment });
-        setShowReject(false);
-        setComment("");
-      } else {
-        setMsg(j?.error || "Failed to reject");
-      }
-    } catch (e: any) {
-      setMsg(e?.message || "Network error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
+function EvidenceRow({ ev }: { ev: Evidence }) {
   return (
     <li style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #eee" }}>
       <div><b>{ev.title || ev.type || ev.id}</b></div>
       <div style={{ color: "#555" }}>{ev.summary || "—"}</div>
-      <div style={{ fontSize: 12, color: "#777", marginTop: 4 }}>
-        {ev.status ? <>Status: <b>{ev.status}</b></> : null}
-        {ev.rejectionComment ? <> &nbsp;•&nbsp; Comment: {ev.rejectionComment}</> : null}
-      </div>
-
-      <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-        <button onClick={accept} disabled={busy} style={{ padding: "6px 10px" }}>Accept</button>
-        <button onClick={() => setShowReject(s => !s)} disabled={busy} style={{ padding: "6px 10px" }}>
-          {showReject ? "Cancel" : "Reject"}
-        </button>
-      </div>
-
-      {showReject && (
-        <div style={{ marginTop: 8 }}>
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Enter rejection comment…"
-            rows={3}
-            style={{ width: "100%", padding: 8 }}
-          />
-          <div style={{ marginTop: 6 }}>
-            <button onClick={submitReject} disabled={busy || !comment.trim()} style={{ padding: "6px 10px" }}>
-              Submit rejection
-            </button>
-          </div>
-        </div>
-      )}
-
-      {msg && <div style={{ marginTop: 6, color: msg === "thanks" || msg === "Saved" ? "#0a0" : "#b00" }}>{msg}</div>}
     </li>
   );
 }
 
 /* ---------- Main page ---------- */
 export default function Home() {
+  const [dxBusy, setDxBusy] = useState(false);
+  const [dxMsg, setDxMsg] = useState<string | null>(null);
+  const [dxRejectOpen, setDxRejectOpen] = useState(false);
+  const [dxComment, setDxComment] = useState("");
   const [query, setQuery] = useState("");
   const [data, setData] = useState<DetailResponse | null>(null);
   const [results, setResults] = useState<any[]>([]);
@@ -157,6 +69,81 @@ export default function Home() {
       return { ...prev, evidences: arr };
     });
   };
+
+async function acceptAllEvidence() {
+  if (!data?.evidences?.length) { setDxMsg("No evidence to accept."); return; }
+  setDxBusy(true); setDxMsg(null);
+  try {
+    // call existing per-evidence API in parallel (throttled by Promise.all)
+    const updates = await Promise.all(
+      data.evidences.map(async (ev) => {
+        if (!ev.id) return null;
+        const r = await fetch(`${BACKEND}/api/evidence/${encodeURIComponent(ev.id)}/accept`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ by: "ui" })
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j?.error || `Failed to accept ${ev.id}`);
+        return j?.evidence || { id: ev.id, status: "accepted", lastAction: "accepted" };
+      })
+    );
+
+    // Patch evidence states in one go
+    setData(prev => {
+      if (!prev) return prev;
+      const map = new Map((updates.filter(Boolean) as Evidence[]).map(e => [e.id, e]));
+      const newEvs = (prev.evidences || []).map(e => map.get(e.id!) ? { ...e, ...map.get(e.id!) } : e);
+      return { ...prev, evidences: newEvs };
+    });
+
+    setDxMsg("thanks");
+    setDxRejectOpen(false);
+    setDxComment("");
+  } catch (e:any) {
+    setDxMsg(e?.message || "Accept failed");
+  } finally {
+    setDxBusy(false);
+  }
+}
+
+async function rejectAllEvidence() {
+  if (!data?.evidences?.length) { setDxMsg("No evidence to reject."); return; }
+  if (!dxComment.trim()) { setDxMsg("Please enter a comment"); return; }
+  setDxBusy(true); setDxMsg(null);
+  try {
+    const updates = await Promise.all(
+      data.evidences.map(async (ev) => {
+        if (!ev.id) return null;
+        const r = await fetch(`${BACKEND}/api/evidence/${encodeURIComponent(ev.id)}/reject`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ by: "ui", comment: dxComment })
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j?.error || `Failed to reject ${ev.id}`);
+        return j?.evidence || { id: ev.id, status: "rejected", lastAction: "rejected", rejectionComment: dxComment };
+      })
+    );
+
+    setData(prev => {
+      if (!prev) return prev;
+      const map = new Map((updates.filter(Boolean) as Evidence[]).map(e => [e.id, e]));
+      const newEvs = (prev.evidences || []).map(e => map.get(e.id!) ? { ...e, ...map.get(e.id!) } : e);
+      return { ...prev, evidences: newEvs };
+    });
+
+    setDxMsg("Saved");
+    setDxRejectOpen(false);
+    setDxComment("");
+  } catch (e:any) {
+    setDxMsg(e?.message || "Reject failed");
+  } finally {
+    setDxBusy(false);
+  }
+}
+
+
 
   async function runSearch(q: string) {
     setLoading(true);
@@ -235,6 +222,43 @@ export default function Home() {
             <>
               <div>{data.diagnosis.title}</div>
               <div>{data.diagnosis.summary}</div>
+              {/* Actions moved here from Evidence rows */}
+              <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                <button onClick={acceptAllEvidence} disabled={dxBusy} style={{ padding: "6px 10px" }}>
+                  Accept
+                </button>
+                <button
+                  onClick={() => { setDxRejectOpen(s => !s); setDxMsg(null); }}
+                  disabled={dxBusy}
+                  style={{ padding: "6px 10px" }}
+                >
+                  {dxRejectOpen ? "Cancel" : "Reject"}
+                </button>
+              </div>
+
+              {dxRejectOpen && (
+                <div style={{ marginTop: 8 }}>
+                  <textarea
+                    value={dxComment}
+                    onChange={(e) => setDxComment(e.target.value)}
+                    placeholder="Enter rejection comment…"
+                    rows={3}
+                    style={{ width: "100%", padding: 8 }}
+                  />
+                  <div style={{ marginTop: 6 }}>
+                    <button onClick={rejectAllEvidence} disabled={dxBusy || !dxComment.trim()} style={{ padding: "6px 10px" }}>
+                      Submit rejection
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {dxMsg && (
+                <div style={{ marginTop: 6, color: dxMsg === "thanks" || dxMsg === "Saved" ? "#0a0" : "#b00" }}>
+                  {dxMsg}
+                </div>
+              )}
+
             </>
           ) : (
             <div>No diagnostics.</div>

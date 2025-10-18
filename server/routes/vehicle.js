@@ -14,7 +14,7 @@ const cypher = `
   // Repairs
   OPTIONAL MATCH (v)-[:HAS_REPAIR]->(r:Repair)
   WITH v, collect(DISTINCT {
-    id:   r.id,
+    id:   coalesce(toString(r.id), elementId(r)),
     name: r.name,
     date: r.date
   }) AS repairs
@@ -34,17 +34,19 @@ const cypher = `
   // Now concatenate lists WITHOUT any further aggregation
   WITH v, repairs, dtcs, (ev_from_dtc + ev_from_vehicle) AS allEvsRaw
 
-  // Project evidence safely
+  // Project evidence with stable string id + safe fields
   WITH v, repairs, dtcs,
        [ev IN allEvsRaw WHERE ev IS NOT NULL |
-         ev{
-           .id,
-           .type,
-           .title,
-           .summary,
-           lastAction:   ev.lastAction,
+         {
+           id: coalesce(toString(ev.id), elementId(ev)),
+           type: ev.type,
+           title: ev.title,
+           summary: ev.summary,
+           status: ev.status,
+           rejectionComment: ev.rejectionComment,
+           lastAction: ev.lastAction,
            lastActionBy: ev.lastActionBy,
-           lastActionAt: ev.lastActionAt
+           lastActionAt: CASE WHEN ev.lastActionAt IS NULL THEN NULL ELSE toString(ev.lastActionAt) END
          }
        ] AS evidences
 

@@ -36,19 +36,13 @@ const cypher = `
 
   // Project evidence with stable string id + safe fields
   WITH v, repairs, dtcs,
-       [ev IN allEvsRaw WHERE ev IS NOT NULL |
-         {
-           id: coalesce(toString(ev.id), elementId(ev)),
-           type: ev.type,
-           title: ev.title,
-           summary: ev.summary,
-           status: ev.status,
-           rejectionComment: ev.rejectionComment,
-           lastAction: ev.lastAction,
-           lastActionBy: ev.lastActionBy,
-           lastActionAt: CASE WHEN ev.lastActionAt IS NULL THEN NULL ELSE toString(ev.lastActionAt) END
-         }
-       ] AS evidences
+      [ev IN allEvsRaw WHERE ev IS NOT NULL |
+        {
+          id: coalesce(toString(ev.id), elementId(ev)),
+          reason: coalesce(ev.summary, ev.description, ev.title, 'Reason not provided')
+        }
+      ] AS evidences
+
 
   // Operator (optional)
   OPTIONAL MATCH (v)-[:OPERATED_BY]->(o:Operator)

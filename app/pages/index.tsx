@@ -2,19 +2,16 @@
 import { useState } from "react";
 import dynamic from 'next/dynamic';
 
-
 /* ---------- Types ---------- */
 type Repair = { id?: string; name?: string; date?: string | null };
 type Evidence = {
-  id?: string;
-  type?: string;
-  title?: string;
-  summary?: string;
-  lastAction?: string;
-  lastActionBy?: string;
-  lastActionAt?: string;
-  status?: "accepted" | "rejected" | string;
-  rejectionComment?: string;
+  id: string;
+  reason?: string;        // <— new (optional so it doesn’t break older payloads)
+  // keep any other fields you still use elsewhere
+  // title?: string;
+  // summary?: string;
+  // status?: string;
+  // rejectionComment?: string;
 };
 type Diagnosis = { title: string; confidence?: number; summary?: string; nextSteps?: string[] };
 type Vehicle = { vin: string; make?: string; model?: string; year?: number; miles?: number; licensePlate?: string; vehicleType?: string; repairs?: Repair[] };
@@ -39,14 +36,114 @@ const BACKEND = process.env.NEXT_PUBLIC_BACKEND_BASE_URL || "http://localhost:40
 const looksLikeVIN = (s: string) => /^[A-HJ-NPR-Z0-9]{11,17}$/i.test(s);
 
 /* ---------- Evidence Row Component ---------- */
-function EvidenceRow({ ev, onPatched }: { ev: Evidence; onPatched?: (patch: Partial<Evidence> & { id?: string }) => void }) {
+function EvidenceRow({ ev }: { ev: Evidence }) {
+  const reason =
+    (ev as any).reason ??
+    (ev as any).summary ??
+    (ev as any).title ??
+    "Reason not provided";
+
   return (
-    <li style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #eee" }}>
-      <div><b>{ev.title || ev.type || ev.id}</b></div>
-      <div style={{ color: "#555" }}>{ev.summary || "—"}</div>
+    <li
+      style={{
+        marginBottom: 12,
+        paddingBottom: 12,
+        borderBottom: "1px solid #eee",
+      }}
+    >
+      <div style={{ fontWeight: 500, color: "#333" }}>{reason}</div>
     </li>
   );
 }
+
+
+function EvidenceSection({ evidences }: { evidences: Evidence[] }) {
+  const [open, setOpen] = useState(false);
+  const maxPreview = 2; // show this many items when collapsed
+
+  const hasMore = evidences?.length > maxPreview;
+  const shown = open ? evidences : evidences?.slice(0, maxPreview);
+
+  return (
+    <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
+      <button
+        onClick={() => setOpen((s) => !s)}
+        aria-expanded={open}
+        aria-controls="evidence-panel"
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          background: "transparent",
+          border: "none",
+          padding: 0,
+          cursor: "pointer",
+        }}
+      >
+        <h3 style={{ margin: 0 }}>
+          Evidence ({evidences?.length ?? 0})
+        </h3>
+        <span
+          style={{
+            transition: "transform 150ms",
+            display: "inline-block",
+            transform: open ? "rotate(90deg)" : "rotate(0deg)",
+          }}
+        >
+          ▶
+        </span>
+      </button>
+
+      {/* Collapsible body */}
+      <div
+        id="evidence-panel"
+        style={{ marginTop: 10, display: open ? "block" : "block" }}
+      >
+        {/* When collapsed and there are more, show only a preview list */}
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {shown?.map((e) => (
+            <EvidenceRow key={e.id || Math.random()} ev={e} />
+          ))}
+        </ul>
+
+        {/* “Show more / less” control (optional, clearer than header toggle) */}
+        {hasMore && (
+          <div style={{ display: "flex", gap: 8 }}>
+            {!open ? (
+              <button
+                onClick={() => setOpen(true)}
+                style={{
+                  padding: "6px 10px",
+                  border: "1px solid #ccc",
+                  borderRadius: 6,
+                  background: "#fafafa",
+                }}
+              >
+                Show {evidences.length - maxPreview} more
+              </button>
+            ) : (
+              <button
+                onClick={() => setOpen(false)}
+                style={{
+                  padding: "6px 10px",
+                  border: "1px solid #ccc",
+                  borderRadius: 6,
+                  background: "#fafafa",
+                }}
+              >
+                Show less
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 
 /* ---------- Main page ---------- */
 export default function Home() {
@@ -267,9 +364,14 @@ async function rejectAllEvidence() {
           <h3><b>Evidence</b></h3>
           {data?.evidences?.length ? (
             <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {data.evidences.map((e) => (
-                <EvidenceRow key={e.id || Math.random()} ev={e} onPatched={patchEvidenceInState} />
-              ))}
+              {data?.evidences?.length ? (
+                <EvidenceSection evidences={data.evidences} />
+              ) : (
+                <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
+                  <h3>Evidence (0)</h3>
+                  <div>No evidence.</div>
+                </div>
+              )}
             </ul>
           ) : (
             <div>No evidence.</div>

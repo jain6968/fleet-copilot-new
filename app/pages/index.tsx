@@ -1,6 +1,7 @@
 // pages/index.tsx
 import { useState } from "react";
 import dynamic from 'next/dynamic';
+import MaintenanceHistorySection, { MaintenanceItem } from "../components/MaintenanceHistory";
 
 /* ---------- Types ---------- */
 type Repair = { id?: string; name?: string; date?: string | null };
@@ -16,6 +17,7 @@ type Evidence = {
 type Diagnosis = { title: string; confidence?: number; summary?: string; nextSteps?: string[] };
 type Vehicle = { vin: string; make?: string; model?: string; year?: number; miles?: number; licensePlate?: string; vehicleType?: string; repairs?: Repair[] };
 type DetailResponse = {
+  maintenanceHistory: MaintenanceItem[];
   vehicle?: Vehicle;
   operator?: { name?: string; city?: string; postcode?: string } | null;
   currentDTC?: string | null;
@@ -296,21 +298,26 @@ async function rejectAllEvidence() {
       {/* 3-column layout */}
       <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
         {/* Vehicle Overview */}
-        <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-          <h3><b>Vehicle Overview</b></h3>
-          {data?.vehicle ? (
-            <>
-              <div><b>VIN:</b> {data.vehicle.vin}</div>
-              <div><b>Model:</b> {data.vehicle.make} {data.vehicle.model} {data.vehicle.year}</div>
-              <div><b>Plate:</b> {data.vehicle.licensePlate || "—"}</div>
-              <div><b>Miles:</b> {data.vehicle.miles ?? "—"}</div>
-              <div><b>Repairs:</b> {data.vehicle.repairs?.length ?? 0}</div>
-              <div>{data.diagnosis.title}</div>
-            </>
-          ) : (
-            <div>No vehicle selected.</div>
-          )}
+      <div className="space-y-4">
+        {/* Vehicle Overview card you already have */}
+        <div className="border rounded-xl p-4 bg-white shadow-sm">
+          <h2 className="text-lg font-semibold mb-2">Vehicle Overview</h2>
+          <div className="text-sm text-gray-700">
+            <div><b>VIN:</b> {data?.vehicle?.vin || "—"}</div>
+            <div><b>Make/Model:</b> {data?.vehicle?.make || "—"} {data?.vehicle?.model || ""}</div>
+            <div><b>Year:</b> {data?.vehicle?.year || "—"}</div>
+            <div><b>Miles:</b> {data?.vehicle?.miles?.toLocaleString?.() || "—"}</div>
+            <div><b>License Plate:</b> {data?.vehicle?.licensePlate || "—"}</div>
+          </div>
         </div>
+
+        {/* NEW: Maintenance History collapsible */}
+        <MaintenanceHistorySection
+          items={(data?.maintenanceHistory as MaintenanceItem[]) || []}
+          defaultOpen={true}
+          maxPreview={3}
+        />
+      </div>
 
         {/* AIDiagnostics */}
         <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>

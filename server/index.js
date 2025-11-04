@@ -8,7 +8,7 @@ import evidence from "./routes/evidence.js"; // default export Router
 import { driver } from "./neo4j.js";
 import path from "path";
 import { fileURLToPath } from "url";
-import langflowRoutes from "./routes/langflow.js";
+import langflowRouter from "./routes/langflow.js";
 
 dotenv.config();
 
@@ -74,11 +74,10 @@ app.use(express.json());
 
 
 app.get("/health", (_req, res) => res.status(200).send("ok"));
-app.use('/api/langflow', langflowRoutes);
 app.use("/api/search", search);
 app.use("/api/vehicle", vehicle);
 app.use("/api/evidence", evidence);
-
+app.use("/api/langflow", langflowRouter);
 app.use((err, req, res, _next) => {
   const origin = req.headers.origin;
   if (origin && allowList.includes(origin)) {

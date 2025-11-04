@@ -2,38 +2,14 @@
 
 import * as React from "react";
 
+// Determine backend URL (Render/Vercel or local)
 const BACKEND =
   process.env.NEXT_PUBLIC_BACKEND ||
   process.env.BACKEND_BASE_URL ||
   "http://localhost:4000";
 
-/** Safely pull the first text reply from the Langflow JSON. */
-function extractFirstMessageText(resp: any): string | null {
-  try {
-    const p1 = resp?.outputs?.[0]?.outputs?.[0]?.results?.message?.text;
-    if (typeof p1 === "string" && p1.trim()) return p1.trim();
-
-    const p2 = resp?.outputs?.[0]?.outputs?.[0]?.results?.message?.data?.text;
-    if (typeof p2 === "string" && p2.trim()) return p2.trim();
-
-    const p3 = resp?.outputs?.[0]?.outputs?.[0]?.artifacts?.message;
-    if (typeof p3 === "string" && p3.trim()) return p3.trim();
-
-    const p4 = resp?.outputs?.[0]?.outputs?.[0]?.outputs?.message?.message;
-    if (typeof p4 === "string" && p4.trim()) return p4.trim();
-
-    const p5 = resp?.outputs?.[0]?.outputs?.[0]?.messages?.[0]?.message;
-    if (typeof p5 === "string" && p5.trim()) return p5.trim();
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 export default function LangflowChatPanel() {
   const [msg, setMsg] = React.useState("");
-  const [lastPrompt, setLastPrompt] = React.useState<string | null>(null);
   const [replyText, setReplyText] = React.useState<string | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -45,6 +21,7 @@ export default function LangflowChatPanel() {
   const [showDownBox, setShowDownBox] = React.useState(false);
   const [downComment, setDownComment] = React.useState("");
 
+  /** Call backend proxy route -> server/routes/langflow.js */
   async function askLangflow(message: string) {
     const r = await fetch(`${BACKEND}/api/langflow/chat`, {
       method: "POST",
@@ -54,34 +31,33 @@ export default function LangflowChatPanel() {
         session_id: "user_123",
       }),
     });
+
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
-      throw new Error(
-        body?.detail || body?.error || `${r.status} ${r.statusText}`
-      );
+      throw new Error(body?.error || `${r.status} ${r.statusText}`);
     }
-    return r.json();
+
+    const data = await r.json();
+    return data.reply || "No reply text found in response.";
   }
 
+  /** Handle Send button click */
   async function onSend() {
     const text = msg.trim();
     if (!text) {
       setErr("Please type a message first.");
       return;
     }
+
     setErr(null);
     setLoading(true);
     setReplyText(null);
-    setFbMsg(null);
     setFbDone(false);
-    setShowDownBox(false);
-    setDownComment("");
-    setLastPrompt(text);
+    setFbMsg(null);
 
     try {
-      const resp = await askLangflow(text);
-      const extracted = extractFirstMessageText(resp);
-      setReplyText(extracted || "(No reply text found in response.)");
+      const reply = await askLangflow(text);
+      setReplyText(reply);
     } catch (e: any) {
       setErr(e.message || "Langflow request failed");
     } finally {
@@ -89,14 +65,10 @@ export default function LangflowChatPanel() {
     }
   }
 
+  /** Handle thumbs up / down feedback (dummy or future extension) */
   async function sendFeedback(kind: "up" | "down", comment?: string) {
-    if (!replyText && !lastPrompt) {
-      setFbMsg("No message to rate.");
-      return;
-    }
     setFbSending(true);
     setFbMsg(null);
-
     try {
       await fetch(`${BACKEND}/api/langflow/feedback`, {
         method: "POST",
@@ -105,17 +77,17 @@ export default function LangflowChatPanel() {
           kind,
           comment: (comment || "").trim(),
           session_id: "user_123",
-          last_prompt: lastPrompt,
           last_reply: replyText,
         }),
       }).catch(() => {
-        // If the route doesn't exist yet locally, don't break the UX
+        // silently ignore if route doesn't exist
       });
+
       setFbDone(true);
       setFbMsg("Thanks!");
       setShowDownBox(false);
       setDownComment("");
-    } catch (e: any) {
+    } catch {
       setFbMsg("Could not send feedback; noted locally.");
     } finally {
       setFbSending(false);
@@ -125,7 +97,11 @@ export default function LangflowChatPanel() {
   return (
     <div className="p-4 border rounded bg-white shadow">
       <h2 className="text-lg font-semibold mb-2">AI Chat Assistant</h2>
+      <p className="text-sm text-gray-600 mb-3">
+        Ask me anything about diagnostics, maintenance, or vehicle analytics.
+      </p>
 
+      {/* Message input */}
       <div className="flex gap-2">
         <input
           type="text"
@@ -143,13 +119,15 @@ export default function LangflowChatPanel() {
         </button>
       </div>
 
+      {/* Error message */}
       {err && <p className="text-red-600 mt-2 text-sm">{err}</p>}
 
+      {/* Chat response */}
       {replyText && (
         <div className="mt-4 p-3 border rounded bg-gray-50">
           <p className="whitespace-pre-wrap text-sm">{replyText}</p>
 
-          {/* Feedback row */}
+          {/* Feedback section */}
           <div className="mt-3 flex items-center gap-2">
             {fbDone ? (
               <span className="text-green-700 text-sm">{fbMsg || "Thanks!"}</span>
@@ -171,12 +149,14 @@ export default function LangflowChatPanel() {
                 >
                   👎
                 </button>
-                {fbMsg && <span className="text-sm text-gray-700">{fbMsg}</span>}
+                {fbMsg && (
+                  <span className="text-sm text-gray-700">{fbMsg}</span>
+                )}
               </>
             )}
           </div>
 
-          {/* Optional comment box for thumbs down */}
+          {/* Downvote comment box */}
           {showDownBox && !fbDone && (
             <div className="mt-2">
               <textarea

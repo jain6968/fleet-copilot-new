@@ -1,64 +1,58 @@
 // server/routes/langflow.js
-import { Router } from 'express';
+import { Router } from "express";
+import fetch from "node-fetch";
 
 const router = Router();
 
-router.post('/chat', async (req, res, next) => {
+const BASE_URL = process.env.LANGFLOW_API_URL;
+const FLOW_ID = process.env.LANGFLOW_FLOW_ID;
+const TOKEN = process.env.LANGFLOW_APPLICATION_TOKEN;
+const ORG_ID = process.env.LANGFLOW_ORG_ID;
+
+function extractText(resp) {
   try {
-    const HOST = process.env.LANGFLOW_HOST_URL;           // must include /lf/<workspace>
-    const FLOW_ID = process.env.LANGFLOW_FLOW_ID;         // a5827591-b2bc-4416-914d-90c87cc59314
-    const TOKEN = process.env.LANGFLOW_APPLICATION_TOKEN; // Bearer token
+    const paths = [
+      resp?.outputs?.[0]?.outputs?.[0]?.results?.message?.data?.text,
+      resp?.outputs?.[0]?.outputs?.[0]?.results?.message?.text,
+      resp?.outputs?.[0]?.outputs?.[0]?.artifacts?.message,
+      resp?.message,
+    ];
+    for (const v of paths) if (typeof v === "string" && v.trim()) return v.trim();
+  } catch {}
+  return null;
+}
 
-    if (!HOST || !FLOW_ID || !TOKEN) {
-      console.error('[Langflow] Missing envs', { HOST: !!HOST, FLOW_ID: !!FLOW_ID, TOKEN: !!TOKEN });
-      return res.status(500).json({ error: 'Langflow env vars missing' });
-    }
+router.post("/chat", async (req, res) => {
+  try {
+    const { input_value, session_id = "default" } = req.body;
 
-    const { input_value, session_id = 'web_user', tweaks } = req.body || {};
-    if (!input_value || typeof input_value !== 'string') {
-      console.warn('[Langflow] 400: input_value missing or not string', req.body);
-      return res.status(400).json({ error: 'input_value (string) is required' });
-    }
-
-    const url = `${HOST.replace(/\/$/, '')}/api/v1/run/${encodeURIComponent(FLOW_ID)}`;
-    const payload = {
+    const url = `${BASE_URL}/${FLOW_ID}?stream=false`;
+    const body = {
+      output_type: "chat",
+      input_type: "chat",
       input_value,
-      output_type: 'chat',
-      input_type: 'chat',
-      ...(session_id ? { session_id } : {}),
-      ...(tweaks ? { tweaks } : {})
+      session_id,
     };
 
-    console.log('[Langflow] ->', url, JSON.stringify(payload));
-
-    const r = await fetch(url, {
-      method: 'POST',
+    const response = await fetch(url, {
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${TOKEN}`,
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TOKEN}`,
+        "X-DataStax-Current-Org": ORG_ID,
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(body),
     });
 
-    const text = await r.text();
-    let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+    const data = await response.json().catch(() => null);
+    if (!data) return res.status(502).json({ error: "Invalid JSON from Langflow" });
 
-    if (!r.ok) {
-      console.error('[Langflow] <-', r.status, json);
-      return res.status(r.status).json(json);
-    }
-
-    console.log('[Langflow] <- 200 OK');
-    return res.json(json);
-  } catch (err) {
-    console.error('[Langflow] Exception', err);
-    next(err);
+    const reply = extractText(data) || "No reply text found in response.";
+    res.json({ reply, raw: data });
+  } catch (e) {
+    console.error("Langflow backend error:", e);
+    res.status(500).json({ error: e.message });
   }
-});
-
-router.post('/feedback', async (req, res) => {
-  console.log('[Langflow feedback]', { ...req.body, at: new Date().toISOString() });
-  res.json({ ok: true });
 });
 
 export default router;

@@ -76,18 +76,19 @@ function EvidenceRow({ ev }: { ev: Evidence }) {
 }
 
 /* ---------- Collapsible Evidence Section ---------- */
+/* ---------- Collapsible Evidence Section ---------- */
 function EvidenceSection({ evidences }: { evidences: Evidence[] }) {
-  const [isOpen, setIsOpen] = useState(false);  // renamed from `open`
-  const maxPreview = 2;
+  const [expanded, setExpanded] = useState<boolean>(false);   // renamed again
 
+  const maxPreview = 2;
   const hasMore = evidences?.length > maxPreview;
-  const shown = isOpen ? evidences : evidences?.slice(0, maxPreview);
+  const shown = expanded ? evidences : evidences?.slice(0, maxPreview);
 
   return (
     <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
       <button
-        onClick={() => setIsOpen((s) => !s)}
-        aria-expanded={isOpen}                   // now clearly boolean
+        onClick={() => setExpanded((s) => !s)}
+        aria-expanded={Boolean(expanded)}     // <<<<<< KEY FIX
         aria-controls="evidence-panel"
         style={{
           width: "100%",
@@ -106,7 +107,7 @@ function EvidenceSection({ evidences }: { evidences: Evidence[] }) {
           style={{
             transition: "transform 150ms",
             display: "inline-block",
-            transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
+            transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
           }}
         >
           ▶
@@ -122,9 +123,9 @@ function EvidenceSection({ evidences }: { evidences: Evidence[] }) {
 
         {hasMore && (
           <div style={{ display: "flex", gap: 8 }}>
-            {!isOpen ? (
+            {!expanded ? (
               <button
-                onClick={() => setIsOpen(true)}
+                onClick={() => setExpanded(true)}
                 style={{
                   padding: "6px 10px",
                   border: "1px solid #ccc",
@@ -136,7 +137,7 @@ function EvidenceSection({ evidences }: { evidences: Evidence[] }) {
               </button>
             ) : (
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={() => setExpanded(false)}
                 style={{
                   padding: "6px 10px",
                   border: "1px solid #ccc",

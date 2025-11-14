@@ -77,17 +77,17 @@ function EvidenceRow({ ev }: { ev: Evidence }) {
 
 /* ---------- Collapsible Evidence Section ---------- */
 function EvidenceSection({ evidences }: { evidences: Evidence[] }) {
-  const [open, setOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);  // renamed from `open`
   const maxPreview = 2;
 
   const hasMore = evidences?.length > maxPreview;
-  const shown = open ? evidences : evidences?.slice(0, maxPreview);
+  const shown = isOpen ? evidences : evidences?.slice(0, maxPreview);
 
   return (
     <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
       <button
-        onClick={() => setOpen((s) => !s)}
-        aria-expanded={open}
+        onClick={() => setIsOpen((s) => !s)}
+        aria-expanded={isOpen}                   // now clearly boolean
         aria-controls="evidence-panel"
         style={{
           width: "100%",
@@ -106,7 +106,7 @@ function EvidenceSection({ evidences }: { evidences: Evidence[] }) {
           style={{
             transition: "transform 150ms",
             display: "inline-block",
-            transform: open ? "rotate(90deg)" : "rotate(0deg)",
+            transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
           }}
         >
           ▶
@@ -122,9 +122,9 @@ function EvidenceSection({ evidences }: { evidences: Evidence[] }) {
 
         {hasMore && (
           <div style={{ display: "flex", gap: 8 }}>
-            {!open ? (
+            {!isOpen ? (
               <button
-                onClick={() => setOpen(true)}
+                onClick={() => setIsOpen(true)}
                 style={{
                   padding: "6px 10px",
                   border: "1px solid #ccc",
@@ -136,7 +136,7 @@ function EvidenceSection({ evidences }: { evidences: Evidence[] }) {
               </button>
             ) : (
               <button
-                onClick={() => setOpen(false)}
+                onClick={() => setIsOpen(false)}
                 style={{
                   padding: "6px 10px",
                   border: "1px solid #ccc",
@@ -153,6 +153,7 @@ function EvidenceSection({ evidences }: { evidences: Evidence[] }) {
     </div>
   );
 }
+
 
 /* ---------- Main page ---------- */
 export default function Home() {

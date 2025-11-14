@@ -34,7 +34,7 @@ export default function HomePage() {
     <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
       <button
         onClick={() => setOpen((s) => !s)}
-        aria-expanded={open}
+        aria-expanded={isOpen}
         aria-controls="evidence-panel"
         style={{
           width: "100%",

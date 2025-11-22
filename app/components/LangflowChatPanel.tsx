@@ -103,12 +103,12 @@ export default function LangflowChatPanel() {
 
       {/* Message input */}
       <div className="flex gap-2">
-        <input
-          type="text"
+        <textarea
           value={msg}
           onChange={(e) => setMsg(e.target.value)}
           placeholder="Type your question..."
-          className="flex-1 border rounded px-3 py-2"
+          className="flex-1 border rounded px-3 py-2 min-h-[80px] resize-y"
+          rows={4}
         />
         <button
           onClick={onSend}

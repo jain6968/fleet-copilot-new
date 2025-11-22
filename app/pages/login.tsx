@@ -25,8 +25,8 @@ export default function Login() {
     setError(null);
 
     // 🔐 Hardcoded credentials for now
-    const okUser = "admin";
-    const okPass = "admin123";
+    const okUser = "user1@uglobalimpact.com";
+    const okPass = "London123";
 
     if (username === okUser && password === okPass) {
       if (typeof window !== "undefined") {

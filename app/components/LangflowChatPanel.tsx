@@ -8,6 +8,32 @@ const BACKEND =
   process.env.BACKEND_BASE_URL ||
   "http://localhost:4000";
 
+/** Extract DTCs from any OCR/raw text (captures P3348, P242F, 01304, etc.) */
+function extractAllDtcs(text: string): string[] {
+  const normalized = (text || "")
+    .replace(/[’‘]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // OBD-ish: P/B/C/U + 0-3 + 3 hex-ish chars (so P242F works)
+  const obd = normalized.match(/\b[PBUC][0-3][0-9A-F]{3}\b/gi) || [];
+  // VAG-ish / generic 5-digit codes like 01304
+  const vag = normalized.match(/\b0\d{4}\b/g) || [];
+
+  // de-dupe preserving order
+  const seen = new Set<string>();
+  const all = [...obd, ...vag]
+    .map((x) => x.toUpperCase())
+    .filter((x) => {
+      if (seen.has(x)) return false;
+      seen.add(x);
+      return true;
+    });
+
+  return all;
+}
+
 export default function LangflowChatPanel() {
   const [msg, setMsg] = React.useState("");
   const [replyText, setReplyText] = React.useState<string | null>(null);
@@ -20,6 +46,11 @@ export default function LangflowChatPanel() {
   const [fbDone, setFbDone] = React.useState(false);
   const [showDownBox, setShowDownBox] = React.useState(false);
   const [downComment, setDownComment] = React.useState("");
+
+  // image upload state
+  const [imgBusy, setImgBusy] = React.useState(false);
+  const [imgErr, setImgErr] = React.useState<string | null>(null);
+  const fileRef = React.useRef<HTMLInputElement | null>(null);
 
   /** Call backend proxy route -> server/routes/langflow.js */
   async function askLangflow(message: string) {
@@ -65,6 +96,67 @@ export default function LangflowChatPanel() {
     }
   }
 
+  /**
+   * Upload image -> backend OCR -> extract ALL fault codes -> prefill message box
+   *
+   * Backend expectation (recommended):
+   * POST ${BACKEND}/api/vision/ocr  (multipart/form-data "image")
+   * returns: { text: "raw ocr text..." }  OR  { text: "...", codes: ["P3348","P242F"] }
+   */
+  async function onPickImage(file: File) {
+    setImgErr(null);
+    setImgBusy(true);
+
+    try {
+      const form = new FormData();
+      form.append("image", file);
+
+      const r = await fetch(`${BACKEND}/api/vision/ocr`, {
+        method: "POST",
+        body: form,
+      });
+
+      if (!r.ok) {
+        const t = await r.text().catch(() => "");
+        throw new Error(t || `OCR failed: ${r.status}`);
+      }
+
+      // support either JSON or plain text from backend
+      const ct = r.headers.get("content-type") || "";
+      let rawText = "";
+      let codesFromApi: string[] | null = null;
+
+      if (ct.includes("application/json")) {
+        const j = await r.json();
+        rawText = (j?.text || j?.raw || "").toString();
+        if (Array.isArray(j?.codes)) codesFromApi = j.codes.map((c: any) => String(c));
+      } else {
+        rawText = await r.text();
+      }
+
+      const codes = (codesFromApi && codesFromApi.length ? codesFromApi : extractAllDtcs(rawText)).map((c) =>
+        c.toUpperCase()
+      );
+
+      if (!codes.length) {
+        setImgErr("I couldn’t detect any fault codes in that image. Try a clearer photo (less glare) or closer zoom.");
+        return;
+      }
+
+      const prompt = `Do you want me to analyse the fault codes shown in the image: ${codes.join(
+        ", "
+      )}? Please explain the likely cause and recommended next steps.`;
+
+      setMsg(prompt);
+    } catch (e: any) {
+      setImgErr(e?.message || "Image processing failed");
+    } finally {
+      setImgBusy(false);
+      // allow re-selecting the same file
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
   /** Handle thumbs up / down feedback (dummy or future extension) */
   async function sendFeedback(kind: "up" | "down", comment?: string) {
     setFbSending(true);
@@ -100,6 +192,22 @@ export default function LangflowChatPanel() {
       <p className="text-sm text-gray-600 mb-3">
         Ask me anything about diagnostics, maintenance, or vehicle analytics.
       </p>
+
+      {/* Image upload */}
+      <div className="mb-3 flex items-center gap-2">
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onPickImage(f);
+          }}
+          className="block text-sm"
+        />
+        {imgBusy && <span className="text-sm text-gray-600">Reading image…</span>}
+      </div>
+      {imgErr && <p className="text-red-600 -mt-1 mb-2 text-sm">{imgErr}</p>}
 
       {/* Message input */}
       <div className="flex gap-2">
@@ -149,9 +257,7 @@ export default function LangflowChatPanel() {
                 >
                   👎
                 </button>
-                {fbMsg && (
-                  <span className="text-sm text-gray-700">{fbMsg}</span>
-                )}
+                {fbMsg && <span className="text-sm text-gray-700">{fbMsg}</span>}
               </>
             )}
           </div>

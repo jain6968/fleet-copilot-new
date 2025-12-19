@@ -9,14 +9,25 @@ import { driver } from "./neo4j.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import langflowRouter from "./routes/langflow.js";
+import visionRoutes from "./routes/vision.js";
 
 dotenv.config();
+const app = express();
 
+app.use(
+  cors({
+    origin: ["http://localhost:3000"], // add your Vercel URL later
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-DataStax-Current-Org"],
+    credentials: true,
+  })
+);
+app.use("/api/vision", visionRoutes);
 // Make dotenv load server/.env regardless of where you start node from
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, ".env") });
-const app = express();
+
 
 // build your allow-list once
 const origins = (process.env.ALLOWED_ORIGINS || '')
@@ -60,6 +71,7 @@ app.use(cors({
   },
   credentials: false
 }));
+
 
 // Answer all preflights
 app.options("*", cors(corsOptionsDelegate));

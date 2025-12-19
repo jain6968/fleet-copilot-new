@@ -14,14 +14,27 @@ import visionRoutes from "./routes/vision.js";
 dotenv.config();
 const app = express();
 
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://fleet-copilot-new.vercel.app",
+];
+
 app.use(
   cors({
-    origin: ["http://localhost:3000"], // add your Vercel URL later
+    origin: (origin, cb) => {
+      // allow server-to-server/no-origin requests
+      if (!origin) return cb(null, true);
+
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+
+      return cb(new Error(`CORS blocked for origin: ${origin}`), false);
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-DataStax-Current-Org"],
-    credentials: true,
+    credentials: false, // set true ONLY if you use cookies/auth across domains
   })
 );
+
 app.use("/api/vision", visionRoutes);
 // Make dotenv load server/.env regardless of where you start node from
 const __filename = fileURLToPath(import.meta.url);
